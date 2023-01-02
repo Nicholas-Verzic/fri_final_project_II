@@ -280,7 +280,7 @@ class PerspectiveTransform:
         self.angles = angles
         self.fillColor = fillColor
 
-    def __call__(self, val, path, imgName, tIm, H, W, f):
+    def __call__(self, val, path, imgName, tIm, H, W, cam, parCap):
         jsonArr = []
         y = H
         x = W
@@ -310,8 +310,6 @@ class PerspectiveTransform:
         # print(circleRegions)
         # print(polyRegions)
 
-        cam = vis.get_view_control()
-        parCap = cam.convert_to_pinhole_camera_parameters()
         for i, angle in enumerate(self.angles):
             print(str(i + 2) + key)
             try:
@@ -332,7 +330,7 @@ class PerspectiveTransform:
                 vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size=100, origin=[0, 4000, 0]))
                 vis.update_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size=100, origin=[0, 4000, 0]))
                 cam.convert_from_pinhole_camera_parameters(parCap, allow_arbitrary=True)
-                cam.camera_local_translate(W/10, 0, 0)
+                # cam.camera_local_translate(W/10, 0, 0)
                 vis.poll_events()
                 vis.update_renderer()
 
@@ -395,6 +393,8 @@ class PerspectiveTransform:
                 # self.tIMG.show()
                 # self.draw = None
 
+                vis.clear_geometries()
+
             except Exception as e:
                 print(e)
         # print(jsonArr)
@@ -406,6 +406,7 @@ if __name__ == "__main__":
 
     vis = o3d.visualization.Visualizer()
     vis.create_window(visible=True)
+    cam = vis.get_view_control()
 
     # vis.set_full_screen(True)
 
@@ -420,8 +421,8 @@ if __name__ == "__main__":
             with open(jsonFile[0], "r") as read_file:
                 data = copy.deepcopy(json.load(read_file))
                 picJSON = data["_via_img_metadata"]
+                z = 0
                 for pic in pictures:
-
                     # print(np.zeros_like(cv2.imread(pic)[:, :, 0]).shape)
                     tempPic = np.ones_like(cv.imread(pic)[:, :, 0]).transpose()
                     print(tempPic.shape)
@@ -445,14 +446,23 @@ if __name__ == "__main__":
 
                     # o3d.visualization.draw_geometries([o3d.geometry.TriangleMesh.create_coordinate_frame(size=100, origin=[0, 0, 0]), rotIm])
 
+                    vis.clear_geometries()
                     vis.add_geometry(rotIm)
+                    vis.update_geometry(rotIm)
+
+                    cam.camera_local_translate(W/10, 0, 0)
+                    vis.poll_events()
+                    vis.update_renderer()
+                    if z == 0:
+                        z = 1
+                        parCap = cam.convert_to_pinhole_camera_parameters()
 
                     tempPic = pic[lastChar(pic, "\\") + 1 :]
                     for key, value in picJSON.items():
                         if tempPic in key:
                             print((value, path, tempPic, rotIm, H, W))
                             print("BREAK")
-                            for i, d in enumerate(transformer(value, path, tempPic, rotIm, H, W, f)):
+                            for i, d in enumerate(transformer(value, path, tempPic, rotIm, H, W, cam, parCap)):
                                 data["_via_img_metadata"][str(i + 2) + key] = d
                                 if data["_via_image_id_list"].count(str(i + 2) + key) == 0:
                                     data["_via_image_id_list"].append(str(i + 2) + key)
@@ -461,6 +471,5 @@ if __name__ == "__main__":
                 # print(data)
                 with open(jsonFile[0][:-5] + "Revised.json", "w") as newFile:
                     json.dump(data, newFile)
-
             read_file.close()
     vis.destroy_window()
