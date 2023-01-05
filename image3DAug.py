@@ -12,6 +12,24 @@ import cv2 as cv
 def lastChar(s, c):
     return -(s[::-1].index(c) + 1)
 
+def retContours(tempIm, al):
+    npIm = np.array(tempIm) * 255
+    gray = cv.cvtColor(npIm, cv.COLOR_RGB2GRAY)
+    gray = (255 - gray)
+    npIm = cv.cvtColor(npIm, cv.COLOR_BGR2RGB)
+    
+    thresh = cv.threshold(gray.astype('uint8'), 1, 255, cv.THRESH_BINARY)[1]
+    kernel = np.ones((5, 5), np.uint8)
+    thresh = cv.erode(thresh, kernel, iterations=1)
+    contours, _ = cv.findContours(image=thresh, mode=cv.RETR_TREE, method=cv.CHAIN_APPROX_SIMPLE)
+    print("CONTOURS:")
+    print(contours)
+    print("END CONTOURS")
+    areas = [cv.contourArea(contour) for contour in contours]
+    contArea = areas.index(max(areas))
+    contours = tuple(cv.approxPolyDP(contours[contArea], al, True))
+
+    return contours, npIm
 
 class PerspectiveTransform:
     parameters = None
@@ -221,6 +239,8 @@ class PerspectiveTransform:
             [rectRegions[i]["shape_attributes"]["y"], rectRegions[i]["shape_attributes"]["x"] + rectRegions[i]["shape_attributes"]["width"], 0], 
             [(rectRegions[i]["shape_attributes"]["y"] + rectRegions[i]["shape_attributes"]["height"]), rectRegions[i]["shape_attributes"]["x"], 0]]))
 
+            pcl.colors = o3d.utility.Vector3dVector(np.asarray([[1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 0]]))
+
             rot = pcl.get_rotation_matrix_from_xyz((0, 0, -math.pi/2))
             pcl.translate(-c)
             pcl.rotate(rot, center=(0, 0, 0))
@@ -236,7 +256,15 @@ class PerspectiveTransform:
             vis.poll_events()
             vis.update_renderer()
 
-            print(np.asarray(pcl.points))
+            tempIm = vis.capture_screen_float_buffer()
+
+            tempIm = np.array(tempIm)
+
+            mask = cv.inRange(tempIm, np.array([0, 0, 0]), np.array([1, 0, 0]))
+            t = cv.findNonZero(mask)
+            contours = tuple(cv.approxPolyDP(np.array(t), 10, True))
+            print("Dots")
+            print(contours)
 
             # pointList = []
 
@@ -352,18 +380,7 @@ class PerspectiveTransform:
 
                 tempIm = vis.capture_screen_float_buffer()
 
-                npIm = np.array(tempIm) * 255
-                gray = cv.cvtColor(npIm, cv.COLOR_RGB2GRAY)
-                gray = (255 - gray)
-                npIm = cv.cvtColor(npIm, cv.COLOR_BGR2RGB)
-                
-                thresh = cv.threshold(gray.astype('uint8'), 1, 255, cv.THRESH_BINARY)[1]
-                kernel = np.ones((5, 5), np.uint8)
-                thresh = cv.erode(thresh, kernel, iterations=1)
-                contours, _ = cv.findContours(image=thresh, mode=cv.RETR_TREE, method=cv.CHAIN_APPROX_SIMPLE)
-                areas = [cv.contourArea(contour) for contour in contours]
-                contArea = areas.index(max(areas))
-                contours = tuple(cv.approxPolyDP(contours[contArea], 30, True))
+                contours, npIm = retContours(tempIm, 30)
 
                 # cv.drawContours(image=thresh, contours=contours, contourIdx=-1, color=(150), thickness=5)
                 # cv.imshow("Temp", thresh)
@@ -381,7 +398,7 @@ class PerspectiveTransform:
                 xWidth = int((maxY-minY)*H/(2*W))
                 npIm = npIm[minY:maxY+1, int((xShape/2)-xWidth):int((xShape/2)+xWidth)]
                 
-                npIm = cv.resize(npIm, (H, W))
+                # npIm = cv.resize(npIm, (H, W))
                 cv.imwrite(path + value["filename"], npIm)
 
                 self.parameters = parCap
