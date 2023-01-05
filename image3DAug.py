@@ -12,13 +12,9 @@ import cv2 as cv
 def lastChar(s, c):
     return -(s[::-1].index(c) + 1)
 
-def pause():
-    while True:
-        print("running")
-
 
 class PerspectiveTransform:
-    transformedIMG = None
+    parameters = None
 
     # {
     #     "shape_attributes": {
@@ -214,65 +210,87 @@ class PerspectiveTransform:
     #     }
     # },
 
-    def rectTransform(self, x, y, angle, rectRegions):
+    def rectTransform(self, x, y, angle, rectRegions, rotIm, cam, c, R):
         for i in range(len(rectRegions)):
             rectRegions[i]["shape_attributes"]["name"] = "polygon"
+            print((rectRegions[i]["shape_attributes"]["x"], rectRegions[i]["shape_attributes"]["y"]))
 
-            pointList = []
+            pcl = o3d.geometry.PointCloud()
+            pcl.points = o3d.utility.Vector3dVector(np.asarray([[rectRegions[i]["shape_attributes"]["y"], rectRegions[i]["shape_attributes"]["x"], 0], 
+            [(rectRegions[i]["shape_attributes"]["y"] + rectRegions[i]["shape_attributes"]["height"]), rectRegions[i]["shape_attributes"]["x"] + rectRegions[i]["shape_attributes"]["width"], 0], 
+            [rectRegions[i]["shape_attributes"]["y"], rectRegions[i]["shape_attributes"]["x"] + rectRegions[i]["shape_attributes"]["width"], 0], 
+            [(rectRegions[i]["shape_attributes"]["y"] + rectRegions[i]["shape_attributes"]["height"]), rectRegions[i]["shape_attributes"]["x"], 0]]))
 
-            pointList.append(
-                self.transformedPoint(
-                    x,
-                    y,
-                    angle,
-                    rectRegions[i]["shape_attributes"]["y"],
-                    rectRegions[i]["shape_attributes"]["x"],
-                )
-            )
-            pointList.append(
-                self.transformedPoint(
-                    x,
-                    y,
-                    angle,
-                    rectRegions[i]["shape_attributes"]["y"]
-                    + rectRegions[i]["shape_attributes"]["height"],
-                    rectRegions[i]["shape_attributes"]["x"]
-                    + rectRegions[i]["shape_attributes"]["width"],
-                )
-            )
-            pointList.append(
-                self.transformedPoint(
-                    x,
-                    y,
-                    angle,
-                    rectRegions[i]["shape_attributes"]["y"],
-                    rectRegions[i]["shape_attributes"]["x"]
-                    + rectRegions[i]["shape_attributes"]["width"],
-                )
-            )
-            pointList.append(
-                self.transformedPoint(
-                    x,
-                    y,
-                    angle,
-                    rectRegions[i]["shape_attributes"]["y"]
-                    + rectRegions[i]["shape_attributes"]["height"],
-                    rectRegions[i]["shape_attributes"]["x"],
-                )
-            )
+            rot = pcl.get_rotation_matrix_from_xyz((0, 0, -math.pi/2))
+            pcl.translate(-c)
+            pcl.rotate(rot, center=(0, 0, 0))
+            pcl.rotate(R, center=(0, 0, 0))
 
-            rectRegions[i]["shape_attributes"].pop("x")
-            rectRegions[i]["shape_attributes"].pop("y")
-            rectRegions[i]["shape_attributes"].pop("width")
-            rectRegions[i]["shape_attributes"].pop("height")
+            vis.clear_geometries()
+            vis.add_geometry(pcl)
+            vis.update_geometry(pcl)
+            cam.camera_local_translate(W/10, 0, 0)
+            # vis.add_geometry(rotIm)
+            # vis.update_geometry(rotIm)
+            cam.convert_from_pinhole_camera_parameters(self.parameters, allow_arbitrary=False)
+            vis.poll_events()
+            vis.update_renderer()
 
-            rectRegions[i]["shape_attributes"]["all_points_x"] = [i[1] for i in pointList]
-            rectRegions[i]["shape_attributes"]["all_points_y"] = [i[0] for i in pointList]
+            print(np.asarray(pcl.points))
 
-            for j in range(len(rectRegions[i]["shape_attributes"]["all_points_x"])):
-                if j > 0:
-                    self.draw.line((rectRegions[i]["shape_attributes"]["all_points_x"][j-1], rectRegions[i]["shape_attributes"]["all_points_y"][j-1], rectRegions[i]["shape_attributes"]["all_points_x"][j], rectRegions[i]["shape_attributes"]["all_points_y"][j]), width = 3)
+            # pointList = []
 
+            # pointList.append(
+            #     self.transformedPoint(
+            #         x,
+            #         y,
+            #         angle,
+            #         rectRegions[i]["shape_attributes"]["y"],
+            #         rectRegions[i]["shape_attributes"]["x"],
+            #     )
+            # )
+            # pointList.append(
+            #     self.transformedPoint(
+            #         x,
+            #         y,
+            #         angle,
+            #         rectRegions[i]["shape_attributes"]["y"]
+            #         + rectRegions[i]["shape_attributes"]["height"],
+            #         rectRegions[i]["shape_attributes"]["x"]
+            #         + rectRegions[i]["shape_attributes"]["width"],
+            #     )
+            # )
+            # pointList.append(
+            #     self.transformedPoint(
+            #         x,
+            #         y,
+            #         angle,
+            #         rectRegions[i]["shape_attributes"]["y"],
+            #         rectRegions[i]["shape_attributes"]["x"]
+            #         + rectRegions[i]["shape_attributes"]["width"],
+            #     )
+            # )
+            # pointList.append(
+            #     self.transformedPoint(
+            #         x,
+            #         y,
+            #         angle,
+            #         rectRegions[i]["shape_attributes"]["y"]
+            #         + rectRegions[i]["shape_attributes"]["height"],
+            #         rectRegions[i]["shape_attributes"]["x"],
+            #     )
+            # )
+
+            # rectRegions[i]["shape_attributes"].pop("x")
+            # rectRegions[i]["shape_attributes"].pop("y")
+            # rectRegions[i]["shape_attributes"].pop("width")
+            # rectRegions[i]["shape_attributes"].pop("height")
+
+            # rectRegions[i]["shape_attributes"]["all_points_x"] = [i[1] for i in pointList]
+            # rectRegions[i]["shape_attributes"]["all_points_y"] = [i[0] for i in pointList]
+
+            
+            
         # print(rectRegions)
         return rectRegions
 
@@ -280,7 +298,7 @@ class PerspectiveTransform:
         self.angles = angles
         self.fillColor = fillColor
 
-    def __call__(self, val, path, imgName, tIm, H, W, cam, parCap):
+    def __call__(self, val, path, imgName, tIm, H, W, cam, parCap, rotIm, c):
         jsonArr = []
         y = H
         x = W
@@ -327,8 +345,6 @@ class PerspectiveTransform:
                 vis.clear_geometries()
                 vis.add_geometry(image)
                 vis.update_geometry(image)
-                vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size=100, origin=[0, 4000, 0]))
-                vis.update_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size=100, origin=[0, 4000, 0]))
                 cam.convert_from_pinhole_camera_parameters(parCap, allow_arbitrary=True)
                 # cam.camera_local_translate(W/10, 0, 0)
                 vis.poll_events()
@@ -368,14 +384,12 @@ class PerspectiveTransform:
                 npIm = cv.resize(npIm, (H, W))
                 cv.imwrite(path + value["filename"], npIm)
 
-                self.transformedIMG = image
-
-                self.draw = ImageDraw.Draw(self.tIMG)
+                self.parameters = parCap
 
                 newShape = []
 
                 print("Rect Transform")
-                newShape = newShape + self.rectTransform(x, y, angle, copy.deepcopy(rectRegions))
+                newShape = newShape + self.rectTransform(x, y, angle, copy.deepcopy(rectRegions), rotIm, cam, c, R)
                 print("Ellipse Transform")
                 newShape = newShape + self.ellipseTransform(
                     x, y, angle, copy.deepcopy(ellipseRegions)
@@ -416,6 +430,8 @@ if __name__ == "__main__":
     for path in buildingDirectories:
         pictures = glob.glob(path + "*.jpg")
         jsonFile = glob.glob(path + "*.json")
+        print(jsonFile)
+        if not any("the_nine" in file for file in jsonFile): continue
         transformer = PerspectiveTransform([-30, -15, 15, 30])
         if len(jsonFile) > 0:
             with open(jsonFile[0], "r") as read_file:
@@ -444,6 +460,9 @@ if __name__ == "__main__":
                     rotIm.translate(-c)
                     rotIm.rotate(R, center=(0, 0, 0))
 
+                    print(rotIm.get_min_bound())
+                    print("DONE\n\n\n")
+
                     # o3d.visualization.draw_geometries([o3d.geometry.TriangleMesh.create_coordinate_frame(size=100, origin=[0, 0, 0]), rotIm])
 
                     vis.clear_geometries()
@@ -462,7 +481,7 @@ if __name__ == "__main__":
                         if tempPic in key:
                             print((value, path, tempPic, rotIm, H, W))
                             print("BREAK")
-                            for i, d in enumerate(transformer(value, path, tempPic, rotIm, H, W, cam, parCap)):
+                            for i, d in enumerate(transformer(value, path, tempPic, rotIm, H, W, cam, parCap, rotIm, c)):
                                 data["_via_img_metadata"][str(i + 2) + key] = d
                                 if data["_via_image_id_list"].count(str(i + 2) + key) == 0:
                                     data["_via_image_id_list"].append(str(i + 2) + key)
